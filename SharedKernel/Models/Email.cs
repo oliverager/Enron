@@ -21,13 +21,13 @@ namespace SharedKernel.Models
         public string From { get; set; }
 
         [BsonElement("to")]
-        public string To { get; set; }
+        public List<string> To { get; set; } = new List<string>();
 
         [BsonElement("cc")]
-        public List<string> Cc { get; set; } = [];
+        public List<string> Cc { get; set; } = new List<string>();
 
         [BsonElement("bcc")]
-        public List<string> Bcc { get; set; } = [];
+        public List<string> Bcc { get; set; } = new List<string>();
 
         [BsonElement("subject")]
         public string Subject { get; set; }

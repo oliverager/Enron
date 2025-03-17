@@ -63,7 +63,7 @@ namespace EmailCleaner.Infrastructure.Services
                             Console.WriteLine($"      📧 ID: {email.MessageId}");
                             Console.WriteLine($"      📅 Date: {email.Date}");
                             Console.WriteLine($"      👤 From: {email.From}");
-                            Console.WriteLine($"      👥 To: {email.To}");
+                            Console.WriteLine($"      👥 To: {string.Join(", ", email.To)}");
                             Console.WriteLine($"      📝 Subject: {email.Subject}");
                             Console.WriteLine($"      📄 Body: {(email.Body.Length > 50 ? email.Body.Substring(0, 50) + "..." : email.Body)}");
                             Console.WriteLine($"      🕒 Processed at: {email.ProcessedAt}");
@@ -164,10 +164,9 @@ namespace EmailCleaner.Infrastructure.Services
             {
                 email.From = line[6..].Trim();
             }
-            else if (line.StartsWith("To: "))
-            {
-                email.To = line[4..].Trim();
-            }
+            else if (line.StartsWith("To: ")) 
+                email.To = line[4..].Trim().Split(',').Select(x => x.Trim()).ToList();
+
             else if (line.StartsWith("Subject: "))
             {
                 email.Subject = line[9..].Trim();
