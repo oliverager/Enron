@@ -98,7 +98,7 @@ namespace EmailCleaner.Infrastructure.Services
                     return null;
                 }
 
-                 Console.WriteLine(email);
+                Console.WriteLine(email);
                 
                 _publisher.Publish(email);
                 return email;
