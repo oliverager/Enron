@@ -14,7 +14,6 @@ namespace EmailCleaner.Infrastructure.Messaging
         public void Publish<T>(T message)
         {
             _bus.PubSub.Publish(message);
-            Console.WriteLine(message);
         }
     }
 }
