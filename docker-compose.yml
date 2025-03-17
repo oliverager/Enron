@@ -1,0 +1,75 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: "rabbitmq:management"
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: always
+
+  mongodb:
+    image: "mongo:latest"
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: always
+
+  elasticsearch:
+    image: "docker.elastic.co/elasticsearch/elasticsearch:7.10.2"
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+    restart: always
+
+  emailindexer:
+    image: your-dockerhub-username/emailindexer:latest
+    build:
+      context: ./EmailIndexerService
+      dockerfile: Dockerfile
+    container_name: emailindexer
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: always
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - MONGO_URI=mongodb://mongodb:27017
+    ports:
+      - "5001:5001"
+
+  searchapi:
+    image: your-dockerhub-username/searchapi:latest
+    build:
+      context: ./SearchAPIService
+      dockerfile: Dockerfile
+    container_name: searchapi
+    depends_on:
+      - mongodb
+      - elasticsearch
+    restart: always
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+      - ELASTICSEARCH_URI=http://elasticsearch:9200
+    ports:
+      - "5002:5002"
+
+  frontendui:
+    image: your-dockerhub-username/frontendui:latest
+    build:
+      context: ./FrontendUI
+      dockerfile: Dockerfile
+    container_name: frontendui
+    depends_on:
+      - searchapi
+    restart: always
+    ports:
+      - "3000:3000"
+
+volumes:
+  mongo_data:
