@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using SharedKernel.Models;
 using EmailCleaner.Infrastructure.Messaging;
+using Serilog;
 
 namespace EmailCleaner.Infrastructure.Services
 {
@@ -17,65 +18,43 @@ namespace EmailCleaner.Infrastructure.Services
         
         public void ProcessEmails(string rootDirectory)
         {
-            Console.WriteLine($"=== STARTED EMAIL PROCESSING: {DateTime.Now} ===");
+            Log.Information("📥 Starting email processing at {Time}", DateTime.UtcNow);
             
             if (!Directory.Exists(rootDirectory))
             {
-                Console.WriteLine($"❌ Root directory not found: {rootDirectory}");
+                Log.Error("❌ Root directory not found: {Directory}", rootDirectory);
                 return;
             }
             
-            Console.WriteLine($"📂 Processing emails in: {rootDirectory}");
-            
-            var processedCount = 0;
-            var skippedFiles = 0;
+            int processedCount = 0, skippedFiles = 0;
             
             foreach (var userDir in Directory.EnumerateDirectories(rootDirectory))
             {
-                Console.WriteLine($"👤 User directory: {Path.GetFileName(userDir)}");
-                
                 foreach (var mailFolder in Directory.EnumerateDirectories(userDir))
                 {
-                    Console.WriteLine($"  📁 Mail folder: {Path.GetFileName(mailFolder)}");
-                    
                     foreach (var file in Directory.EnumerateFiles(mailFolder, "*.txt", SearchOption.TopDirectoryOnly))
                     {
-                        if (!File.Exists(file)) continue; // Skip if file doesn't exist
-                        
-                        Console.WriteLine($"    📄 Processing file: {Path.GetFileName(file)}");
-                        var email = ParseAndPublishEmail(file);
-                        
-                        if (email == null)
+                        try
                         {
-                            skippedFiles++;
-                            Console.WriteLine($"      ❌ Skipped file. Total skipped: {skippedFiles}");
-                            
-                            if (skippedFiles >= 10)
+                            var email = ParseAndPublishEmail(file);
+                            if (email != null)
                             {
-                                Console.WriteLine("❌ Too many skipped files, stopping.");
-                                return;
+                                processedCount++;
+                                Log.Information("✅ Email processed: {Subject} - From: {From}", email.Subject, email.From);
+                            }
+                            else
+                            {
+                                skippedFiles++;
                             }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            processedCount++;
-                            Console.WriteLine($"      ✅ EMAIL #{processedCount} PROCESSED");
-                            Console.WriteLine($"      📧 ID: {email.MessageId}");
-                            Console.WriteLine($"      📅 Date: {email.Date}");
-                            Console.WriteLine($"      👤 From: {email.From}");
-                            Console.WriteLine($"      👥 To: {string.Join(", ", email.To)}");
-                            Console.WriteLine($"      📝 Subject: {email.Subject}");
-                            Console.WriteLine($"      📄 Body: {(email.Body.Length > 50 ? email.Body.Substring(0, 50) + "..." : email.Body)}");
-                            Console.WriteLine($"      🕒 Processed at: {email.ProcessedAt}");
-                            Console.WriteLine("      ------------------------------");
+                            Log.Error(ex, "🚨 Error processing file {File}", file);
                         }
                     }
                 }
             }
-            
-            Console.WriteLine($"=== COMPLETED EMAIL PROCESSING: {DateTime.Now} ===");
-            Console.WriteLine($"✅ Total processed: {processedCount}");
-            Console.WriteLine($"❌ Total skipped: {skippedFiles}");
+            Log.Information("✅ Processing completed. Total: {Processed}, Skipped: {Skipped}", processedCount, skippedFiles);
         }
         
         private Email ParseAndPublishEmail(string filePath)
@@ -86,7 +65,7 @@ namespace EmailCleaner.Infrastructure.Services
                 
                 if (string.IsNullOrWhiteSpace(content))
                 {
-                    Console.WriteLine($"      ⚠️ Empty file: {Path.GetFileName(filePath)}");
+                    Log.Warning($"⚠️ Empty file: {Path.GetFileName(filePath)}");
                     return null;
                 }
                 
@@ -94,18 +73,16 @@ namespace EmailCleaner.Infrastructure.Services
                 
                 if (email == null)
                 {
-                    Console.WriteLine($"      ⚠️ Failed to parse email: {Path.GetFileName(filePath)}");
+                    Log.Warning($"⚠️ Failed to parse email: {Path.GetFileName(filePath)}");
                     return null;
                 }
-
-                Console.WriteLine(email);
                 
                 _publisher.Publish(email);
                 return email;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"      🚨 Error processing {Path.GetFileName(filePath)}: {ex.Message}");
+                Log.Error($"🚨 Error processing {Path.GetFileName(filePath)}: {ex.Message}");
                 return null;
             }
         }
@@ -153,7 +130,7 @@ namespace EmailCleaner.Infrastructure.Services
                 else
                 {
                     email.Date = "Invalid Date";
-                    Console.WriteLine($"      ⚠️ Failed to parse date: {dateString}");
+                    Log.Warning($"      ⚠️ Failed to parse date: {dateString}");
                 }
             }
 
@@ -177,7 +154,7 @@ namespace EmailCleaner.Infrastructure.Services
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"      🚨 Error parsing email: {ex.Message}");
+        Log.Error($"🚨 Error parsing email: {ex.Message}");
         return null;
     }
 }

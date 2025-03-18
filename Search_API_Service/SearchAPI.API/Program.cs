@@ -2,19 +2,27 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MongoDB.Driver;
-using Nest;
+using Serilog;
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Register MongoDB
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient("mongodb://localhost:27017"));
 
-// Register Elasticsearch
-builder.Services.AddSingleton<IElasticClient>(_ =>
-{
-    var settings = new ConnectionSettings(new Uri("http://localhost:9200")).DefaultIndex("emails");
-    return new ElasticClient(settings);
-});
+// ✅ Configure Serilog Logging
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .WriteTo.File("logs/app_log.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.Elasticsearch(new Serilog.Sinks.Elasticsearch.ElasticsearchSinkOptions(new Uri("http://localhost:9200"))
+    {
+        AutoRegisterTemplate = true,
+        IndexFormat = "logs-enron-{0:yyyy.MM.dd}"
+    })
+    .Enrich.FromLogContext()
+    .CreateLogger();
+
+builder.Host.UseSerilog(); // Attach Serilog to .NET
 
 // Enable CORS
 builder.Services.AddCors(options =>
@@ -29,9 +37,22 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
-
 var app = builder.Build();
 
+app.UseSerilogRequestLogging(); // Log all HTTP requests
 app.UseCors("AllowAll");
 app.MapControllers();
-app.Run();
+
+try
+{
+    Log.Information("🚀 Starting up the application...");
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "🚨 Application terminated unexpectedly!");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
