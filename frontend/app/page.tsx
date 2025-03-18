@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { Search, Download, Mail } from "lucide-react"
+import { Search, Download, Mail, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
 import { Input } from "../components/ui/input"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/ui/card"
@@ -37,6 +37,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 100 // Fixed page size of 100
+  const [isChangingPage, setIsChangingPage] = useState(false)
+
   // Fix hydration issues by only rendering after component is mounted
   useEffect(() => {
     setMounted(true)
@@ -51,10 +56,13 @@ export default function Home() {
     setIsSearching(true)
     setHasSearched(true)
     setError(null)
+    setCurrentPage(1) // Reset to first page on new search
 
     try {
-      // Connect to the actual API endpoint
-      const response = await fetch(`${API_BASE_URL}/search?query=${encodeURIComponent(searchQuery)}`)
+      // Connect to the actual API endpoint with fixed page size of 100
+      const response = await fetch(
+        `${API_BASE_URL}/search?query=${encodeURIComponent(searchQuery)}&page=1&pageSize=${pageSize}`,
+      )
 
       if (!response.ok) {
         throw new Error(`Search failed with status: ${response.status}`)
@@ -63,7 +71,6 @@ export default function Home() {
       const data = await response.json()
 
       // Handle the response based on your API's actual structure
-      // Adjust this based on your actual API response format
       if (Array.isArray(data)) {
         setResults(data)
         setTotalResults(data.length)
@@ -82,6 +89,42 @@ export default function Home() {
       setError(`Failed to search: ${error instanceof Error ? error.message : "Unknown error"}`)
     } finally {
       setIsSearching(false)
+    }
+  }
+
+  const changePage = async (newPage: number) => {
+    if (newPage < 1 || newPage > Math.ceil(totalResults / pageSize)) return
+    if (isChangingPage) return
+
+    setIsChangingPage(true)
+
+    try {
+      console.log(`Fetching page ${newPage} with pageSize ${pageSize}`)
+      const response = await fetch(
+        `${API_BASE_URL}/search?query=${encodeURIComponent(searchQuery)}&page=${newPage}&pageSize=${pageSize}`,
+      )
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch page ${newPage}`)
+      }
+
+      const data = await response.json()
+
+      if (Array.isArray(data)) {
+        setResults(data)
+      } else if (data.hits && Array.isArray(data.hits)) {
+        setResults(data.hits)
+      } else {
+        throw new Error("Unexpected response format")
+      }
+
+      // Only update the page number after successfully fetching the data
+      setCurrentPage(newPage)
+    } catch (error) {
+      console.error("Page change error:", error)
+      setError(`Failed to load page ${newPage}: ${error instanceof Error ? error.message : "Unknown error"}`)
+    } finally {
+      setIsChangingPage(false)
     }
   }
 
@@ -110,28 +153,29 @@ export default function Home() {
   }
 
   // Format date to match email format: 'Fri, 30 Jun 2000 06:41:00 -0700'
-const formatDate = (dateStr: string): string => {
-  if (!dateStr || dateStr === "Invalid Date") return "Unknown date";
+  const formatDate = (dateStr: string): string => {
+    if (!dateStr || dateStr === "Invalid Date") return "Unknown date"
 
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return "Unknown date";
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return "Unknown date"
 
-    return date.toLocaleString("en-US", {
-      weekday: "short",  // "Fri"
-      day: "2-digit",    // "30"
-      month: "short",    // "Jun"
-      year: "numeric",   // "2000"
-      hour: "2-digit",   // "06"
-      minute: "2-digit", // "41"
-      second: "2-digit", // "00"
-      timeZoneName: "short" // "-0700"
-    }).replace(",", ""); // Removes the comma after the weekday
-  } catch {
-    return "Unknown date";
+      return date
+        .toLocaleString("en-US", {
+          weekday: "short", // "Fri"
+          day: "2-digit", // "30"
+          month: "short", // "Jun"
+          year: "numeric", // "2000"
+          hour: "2-digit", // "06"
+          minute: "2-digit", // "41"
+          second: "2-digit", // "00"
+          timeZoneName: "short", // "-0700"
+        })
+        .replace(",", "") // Removes the comma after the weekday
+    } catch {
+      return "Unknown date"
+    }
   }
-};
-
 
   // Get excerpt from email body
   const getExcerpt = (body: string, maxLength = 100) => {
@@ -155,6 +199,11 @@ const formatDate = (dateStr: string): string => {
 
     return highlightedText
   }
+
+  // Calculate pagination info
+  const startIndex = (currentPage - 1) * pageSize + 1
+  const endIndex = Math.min(currentPage * pageSize, totalResults)
+  const totalPages = Math.ceil(totalResults / pageSize)
 
   // If not mounted yet, return a minimal UI to prevent hydration errors
   if (!mounted) {
@@ -223,7 +272,7 @@ const formatDate = (dateStr: string): string => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isSearching ? (
+              {isSearching || isChangingPage ? (
                 // Loading state
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -246,7 +295,7 @@ const formatDate = (dateStr: string): string => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {results.map((email) => (
+                    {results.slice(startIndex, endIndex).map((email) => (
                       <TableRow key={email._id}>
                         <TableCell>
                           <div className="font-medium">{email.subject || "(No Subject)"}</div>
@@ -296,11 +345,42 @@ const formatDate = (dateStr: string): string => {
               )}
             </CardContent>
             {results.length > 0 && (
-              <CardFooter className="flex justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Showing {results.length} of {totalResults} results
+              <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    {startIndex} - {endIndex} of {totalResults}
+                  </span>
                 </div>
-                {/* Pagination could be added here */}
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => changePage(currentPage - 1)}
+                    disabled={currentPage === 1 || isChangingPage}
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="flex items-center mx-2">
+                    <span className="text-sm">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => changePage(currentPage + 1)}
+                    disabled={currentPage >= totalPages || isChangingPage}
+                    title="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+
+                  {isChangingPage && <RefreshCw className="h-4 w-4 animate-spin ml-2" />}
+                </div>
               </CardFooter>
             )}
           </Card>
