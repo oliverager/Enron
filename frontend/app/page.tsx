@@ -17,7 +17,7 @@ interface EmailResult {
   messageId: string
   date: string
   from: string
-  to: string
+  to: string[] // Updated to be an array
   cc: string[]
   bcc: string[]
   subject: string
@@ -109,16 +109,29 @@ export default function Home() {
     }
   }
 
-  // Format date handling "Invalid Date"
-  const formatDate = (dateStr: string) => {
-    if (!dateStr || dateStr === "Invalid Date") return "Unknown date"
-    try {
-      const date = new Date(dateStr)
-      return isNaN(date.getTime()) ? "Unknown date" : date.toLocaleDateString()
-    } catch {
-      return "Unknown date"
-    }
+  // Format date to match email format: 'Fri, 30 Jun 2000 06:41:00 -0700'
+const formatDate = (dateStr: string): string => {
+  if (!dateStr || dateStr === "Invalid Date") return "Unknown date";
+
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "Unknown date";
+
+    return date.toLocaleString("en-US", {
+      weekday: "short",  // "Fri"
+      day: "2-digit",    // "30"
+      month: "short",    // "Jun"
+      year: "numeric",   // "2000"
+      hour: "2-digit",   // "06"
+      minute: "2-digit", // "41"
+      second: "2-digit", // "00"
+      timeZoneName: "short" // "-0700"
+    }).replace(",", ""); // Removes the comma after the weekday
+  } catch {
+    return "Unknown date";
   }
+};
+
 
   // Get excerpt from email body
   const getExcerpt = (body: string, maxLength = 100) => {
@@ -247,8 +260,18 @@ export default function Home() {
                         <TableCell className="truncate" title={email.from}>
                           {email.from}
                         </TableCell>
-                        <TableCell className="truncate" title={email.to}>
-                          {email.to}
+                        <TableCell className="max-w-[200px]">
+                          <div className="space-y-1">
+                            {Array.isArray(email.to) && email.to.length > 0 ? (
+                              email.to.map((recipient, i) => (
+                                <div key={i} className="truncate" title={recipient}>
+                                  {recipient}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-muted-foreground italic">(No recipients)</div>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>{formatDate(email.date)}</TableCell>
                         <TableCell>

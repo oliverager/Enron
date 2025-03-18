@@ -137,29 +137,26 @@ namespace EmailCleaner.Infrastructure.Services
             {
                 string dateString = line[6..].Trim();
 
-                // Remove the time zone abbreviation part (e.g., "(PDT)")
-                int timeZoneIndex = dateString.IndexOf('(');
-                if (timeZoneIndex >= 0)
-                {
-                    dateString = dateString.Substring(0, timeZoneIndex).Trim();
-                }
+                // Remove parentheses and timezone abbreviation (e.g., "(PDT)")
+                dateString = System.Text.RegularExpressions.Regex.Replace(dateString, @"\s*\(.*?\)", "").Trim();
 
-                // Try parsing the date with the expected format
-                string[] dateFormats = {
-                    "ddd, d MMM yyyy HH:mm:ss zzz", // Example: Wed, 9 May 2001 17:13:00 -0700
-                    "ddd, dd MMM yyyy HH:mm:ss zzz" // Example: Wed, 09 May 2001 17:13:00 -0700
+                string[] possibleFormats = {
+                    "ddd, d MMM yyyy HH:mm:ss zzz",  // Fri, 30 Jun 2000 06:41:00 -0700
+                    "ddd, dd MMM yyyy HH:mm:ss zzz" // Fri, 30 Jun 2000 06:41:00 -0700
                 };
 
-                if (DateTime.TryParseExact(dateString, dateFormats, null, System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
+                if (DateTime.TryParseExact(dateString, possibleFormats, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AllowWhiteSpaces, out DateTime parsedDate))
                 {
                     email.Date = parsedDate.ToString("yyyy-MM-dd HH:mm:ss");
                 }
                 else
                 {
                     email.Date = "Invalid Date";
-                    Console.WriteLine($"      ⚠️ Invalid date format: {dateString}");
+                    Console.WriteLine($"      ⚠️ Failed to parse date: {dateString}");
                 }
             }
+
             else if (line.StartsWith("From: "))
             {
                 email.From = line[6..].Trim();

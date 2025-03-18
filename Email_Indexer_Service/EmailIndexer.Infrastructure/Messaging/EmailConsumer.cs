@@ -17,21 +17,22 @@ namespace EmailIndexer.Infrastructure.Messaging
             var database = mongoClient.GetDatabase("EmailDB");
             _emailCollection = database.GetCollection<Email>("emails");
 
-            // ✅ Check if the text index exists before creating it
-            var indexList = _emailCollection.Indexes.List().ToList();
-            bool textIndexExists = indexList.Any(index => index["name"] == "TextIndex");
+            // 🔥 Drop and recreate text index to ensure it's applied correctly
+            Console.WriteLine("🛠️ Dropping existing text index (if any)...");
+            try
+            {
+                _emailCollection.Indexes.DropOne("TextIndex");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️ No existing text index to drop: {ex.Message}");
+            }
 
-            if (!textIndexExists)
-            {
-                var indexKeys = Builders<Email>.IndexKeys.Text(e => e.Body).Text(e => e.Subject);
-                var indexModel = new CreateIndexModel<Email>(indexKeys, new CreateIndexOptions { Name = "TextIndex" });
-                _emailCollection.Indexes.CreateOne(indexModel);
-                Console.WriteLine("✅ MongoDB Text Index Created Successfully.");
-            }
-            else
-            {
-                Console.WriteLine("⚠️ MongoDB Text Index Already Exists.");
-            }
+            Console.WriteLine("🔄 Creating a new text index...");
+            var indexKeys = Builders<Email>.IndexKeys.Text(e => e.Body).Text(e => e.Subject);
+            var indexModel = new CreateIndexModel<Email>(indexKeys, new CreateIndexOptions { Name = "TextIndex" });
+            _emailCollection.Indexes.CreateOne(indexModel);
+            Console.WriteLine("✅ MongoDB Text Index Recreated Successfully.");
         }
 
         public void StartListening()
